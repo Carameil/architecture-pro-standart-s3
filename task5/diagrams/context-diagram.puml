@@ -1,0 +1,111 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+!define DEVICONS https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/devicons
+!define FONTAWESOME https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/font-awesome-5
+!include DEVICONS/react.puml
+!include DEVICONS/java.puml
+!include FONTAWESOME/users.puml
+!include FONTAWESOME/university.puml
+!include FONTAWESOME/mobile_alt.puml
+!include FONTAWESOME/headset.puml
+!include FONTAWESOME/chart_line.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C4 Context Diagram - Банк "Стандарт" - Расширенная платформа (Депозиты + Кредиты)
+
+Person(newClient, "Новый клиент", "Потенциальный клиент, подающий заявку на кредит через сайт", $sprite="users")
+Person(existingClient, "Существующий клиент", "Клиент банка с доступом к интернет-банку, управляющий депозитами и кредитами", $sprite="users")
+Person(backofficeDeposits, "Сотрудник депозитного отдела", "Менеджер, обрабатывающий заявки на депозиты", $sprite="headset")
+Person(backofficeCredits, "Сотрудник кредитного отдела", "Менеджер, обрабатывающий кредитные заявки", $sprite="headset")
+Person(callCenterAgent, "Сотрудник кол-центра", "Оператор, работающий с заявками клиентов и консультирующий по депозитам и кредитам", $sprite="headset")
+Person(partnerCallCenterAgent, "Оператор партнерского кол-центра", "Сотрудник внешнего партнерского кол-центра", $sprite="headset")
+
+System_Boundary(standardBankPlatform, "Банк 'Стандарт' - Расширенная финансовая платформа") {
+    System(financialPlatform, "Финансовая платформа", "Объединенная система управления депозитами и кредитами с общей инфраструктурой", $sprite="university")
+}
+
+System_Ext(abs, "АБС", "Автоматизированная банковская система (Oracle, Delphi) - core система банка", $sprite="university")
+System_Ext(creditConveyor, "Credit Conveyor", "Существующая система обработки кредитных заявок (Camunda, Oracle)", $sprite="chart_line")
+System_Ext(scoringSystem, "Scoring System", "Система кредитного скоринга (Python, Flask, PostgreSQL)", $sprite="chart_line")
+System_Ext(bki, "БКИ", "Бюро кредитных историй - внешний провайдер кредитных данных", $sprite="chart_line")
+System_Ext(smsGateway, "СМС-шлюз", "Система отправки СМС-уведомлений", $sprite="mobile_alt")
+System_Ext(telecomOperator, "Телеком-оператор", "Внешний оператор для доставки СМС", $sprite="mobile_alt")
+System_Ext(sftpServer, "SFTP-сервер", "Файловый сервер для обмена ставками с партнерским кол-центром", $sprite="server")
+System_Ext(partnerCallCenter, "Партнерский кол-центр", "Внешняя система партнерского кол-центра", $sprite="headset")
+
+' Client interactions
+Rel(newClient, financialPlatform, "Подает заявки на депозиты и кредиты, получает предварительные решения", "HTTPS/Website")
+Rel(existingClient, financialPlatform, "Управляет депозитами и кредитами, видит предодобренные предложения", "HTTPS/Internet Banking")
+Rel(callCenterAgent, financialPlatform, "Работает с заявками новых клиентов, консультирует по депозитам и кредитам", "Web Interface")
+Rel(partnerCallCenterAgent, partnerCallCenter, "Консультирует клиентов по ставкам", "Internal Interface")
+Rel(backofficeDeposits, financialPlatform, "Обрабатывает депозитные заявки", "Web Interface")
+Rel(backofficeCredits, financialPlatform, "Обрабатывает кредитные заявки", "Web Interface")
+
+' Platform integrations
+Rel(financialPlatform, abs, "Создает депозиты/кредиты, получает данные клиентов, синхронизирует ставки", "REST API/Database")
+Rel(financialPlatform, creditConveyor, "Передает кредитные заявки, получает статусы решений", "REST API/Events")
+Rel(financialPlatform, scoringSystem, "Запрашивает кредитную оценку для предварительных решений", "REST API")
+Rel(financialPlatform, bki, "Получает кредитные истории для скоринга новых клиентов", "REST API")
+Rel(financialPlatform, smsGateway, "Отправляет уведомления о статусе депозитов и кредитов", "HTTP API")
+Rel(smsGateway, telecomOperator, "Доставляет СМС клиентам", "Telecom Protocol")
+Rel(financialPlatform, sftpServer, "Передает файлы со ставками по депозитам и кредитам", "SFTP")
+Rel(partnerCallCenter, sftpServer, "Получает файлы со ставками", "SFTP")
+
+' Cross-system integrations
+Rel(scoringSystem, bki, "Запрашивает кредитные истории", "REST API")
+Rel(scoringSystem, abs, "Получает данные клиентов (раз в день)", "Database")
+Rel(creditConveyor, abs, "Синхронизирует решения по кредитам (раз в день)", "Database")
+
+note right of financialPlatform
+  **Расширенная платформа (год после MVP):**
+  - Депозиты: Заявки с сайта и ИБ, обработка бэк-офисом
+  - Кредиты: Предварительные решения, предодобренные предложения
+  - Общая инфраструктура: API Gateway, Auth, Notifications, SFTP
+  - Интеграция с существующими кредитными системами
+  - Единая поддержка кол-центра для всех продуктов
+end note
+
+note left of newClient
+  **Сценарий нового клиента (кредит):**
+  - Заполнение анкеты на сайте
+  - Получение предварительного решения (5 мин)
+  - Звонок от кол-центра при одобрении
+  - Финальное оформление в отделении
+  - SMS уведомления о статусе
+end note
+
+note right of existingClient
+  **Сценарий существующего клиента:**
+  - Управление депозитами и кредитами в ИБ
+  - Предодобренные кредитные предложения
+  - Быстрое решение по заявкам (в течение дня)
+  - SMS подтверждения операций
+end note
+
+note bottom of creditConveyor
+  **Существующие кредитные системы:**
+  - Credit Conveyor: workflow обработки заявок
+  - Scoring System: ML-оценка кредитоспособности
+  - БКИ: внешние кредитные истории
+  - Интеграция без изменения ядра систем
+end note
+
+note top of abs
+  **Центральная роль АБС:**
+  - Единый источник клиентских данных
+  - Создание депозитов и кредитов
+  - Пакетная синхронизация (раз в день)
+  - Защита от перегрузки через адаптеры
+end note
+
+note bottom of partnerCallCenter
+  **Партнерский кол-центр (расширение):**
+  - Получает ставки по депозитам И кредитам
+  - Переиспользование SFTP инфраструктуры
+  - Единый формат файлов для всех продуктов
+  - Консолидированная поддержка клиентов
+end note
+
+@enduml 

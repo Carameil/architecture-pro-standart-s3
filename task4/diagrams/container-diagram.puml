@@ -1,0 +1,117 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C4 Container Diagram - Передача ставок по депозитам в кол-центр
+
+Person(callCenterOperator, "Оператор кол-центра", "Сотрудник банка")
+Person(partnerOperator, "Оператор партнерского кол-центра", "Сотрудник партнера")
+
+System_Boundary(depositPlatform, "Депозитная платформа") {
+    Container(apiGateway, "API Gateway", "Kong", "Единая точка входа, аутентификация, rate limiting")
+    Container(ratesService, "Rates Service", "Java Spring Boot", "Управление ставками по депозитам, расширен для кол-центра")
+    Container(scheduler, "Scheduler", "Cron/Quartz", "Планировщик обновления ставок и генерации файлов")
+    Container(sftpFileGenerator, "SFTP File Generator", "Java Spring Boot", "Генерация файлов со ставками для партнеров")
+    ContainerDb(ratesCache, "Rates Cache", "Redis", "Кэш актуальных ставок для быстрого доступа")
+    ContainerDb(ratesDb, "Rates Database", "PostgreSQL", "База данных ставок")
+}
+
+System_Boundary(callCenterSystems, "Системы кол-центра") {
+    Container(callCenterUI, "Call Center UI", "React.js", "Интерфейс оператора с новым разделом ставок")
+    Container(callCenterCore, "Call Center Core", "Java Spring Boot", "Основная логика CRM-системы")
+    ContainerDb(callCenterDb, "Call Center DB", "PostgreSQL", "База данных кол-центра")
+}
+
+System_Boundary(infrastructure, "Инфраструктура") {
+    Container(sftpServer, "SFTP Server", "OpenSSH", "Файловый сервер для обмена с партнерами")
+    Container(monitoring, "Monitoring", "Prometheus/Grafana", "Мониторинг SFTP и API")
+}
+
+System_Ext(abs, "АБС", "Автоматизированная банковская система")
+System_Ext(partnerCallCenter, "Партнерский кол-центр", "Внешняя система партнера")
+
+' User interactions
+Rel(callCenterOperator, callCenterUI, "Работает с интерфейсом", "HTTPS")
+Rel(partnerOperator, partnerCallCenter, "Использует полученные ставки", "Internal Interface")
+
+' Call Center internal flow
+Rel(callCenterUI, callCenterCore, "Запросы к CRM", "HTTP/REST")
+Rel(callCenterCore, callCenterDb, "Данные клиентов", "SQL")
+
+' Call Center to Rates Service
+Rel(callCenterCore, apiGateway, "Запрос ставок для консультации", "HTTPS/REST")
+Rel(apiGateway, ratesService, "Аутентификация и роутинг", "HTTP/REST")
+
+' Rates Service operations
+Rel(ratesService, ratesCache, "Быстрое получение ставок", "Redis Protocol")
+Rel(ratesService, ratesDb, "Постоянное хранение", "SQL")
+Rel(scheduler, ratesService, "Триггер обновления ставок", "Internal Call")
+Rel(scheduler, sftpFileGenerator, "Триггер генерации файлов", "Internal Call")
+
+' SFTP file operations
+Rel(sftpFileGenerator, ratesService, "Получение данных для файла", "Internal API")
+Rel(sftpFileGenerator, sftpServer, "Загрузка файлов со ставками", "SFTP")
+Rel(partnerCallCenter, sftpServer, "Скачивание файлов по расписанию", "SFTP")
+
+' Data synchronization
+Rel(ratesService, abs, "Синхронизация актуальных ставок", "Database/REST")
+
+' Monitoring
+Rel(monitoring, sftpServer, "Мониторинг доступности", "SSH/SNMP")
+Rel(monitoring, apiGateway, "Метрики API", "HTTP")
+Rel(monitoring, ratesService, "Метрики сервиса", "HTTP")
+
+note right of ratesService
+  **Расширенный Rates Service:**
+  - Новый endpoint GET /rates/call-center
+  - Кэширование для быстрого отклика
+  - Интеграция с SFTP File Generator
+  - Rate limiting для защиты от перегрузки
+  - Версионирование API для совместимости
+end note
+
+note left of sftpFileGenerator
+  **SFTP File Generator:**
+  - Автоматическая генерация CSV/JSON
+  - Планировщик обновления файлов
+  - Проверка целостности данных
+  - Логирование операций
+  - Обработка ошибок передачи
+end note
+
+note bottom of callCenterCore
+  **Минимальные изменения в Call Center:**
+  - Новый API вызов к Rates Service
+  - Обработка ответа со ставками
+  - Кэширование на уровне сессии
+  - Обработка ошибок API
+end note
+
+note top of sftpServer
+  **SFTP Server:**
+  - SSH-ключи для безопасности
+  - Автоматическая ротация файлов
+  - Резервные копии
+  - Мониторинг дискового пространства
+  - Логирование доступа партнеров
+end note
+
+note bottom of partnerCallCenter
+  **Интеграция партнера:**
+  - Автоматическое скачивание файлов
+  - Парсинг CSV/JSON форматов
+  - Локальное кэширование ставок
+  - Fallback на предыдущие версии
+  - Уведомления об ошибках
+end note
+
+note right of scheduler
+  **Планировщик задач:**
+  - Обновление ставок из АБС (каждый час)
+  - Генерация файлов для SFTP (2 раза в день)
+  - Очистка старых файлов
+  - Проверка здоровья системы
+end note
+
+@enduml 

@@ -1,0 +1,81 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+!define DEVICONS https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/devicons
+!define FONTAWESOME https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/font-awesome-5
+!include FONTAWESOME/users.puml
+!include FONTAWESOME/university.puml
+!include FONTAWESOME/headset.puml
+!include FONTAWESOME/server.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C4 Context Diagram - Передача ставок по депозитам в кол-центр
+
+Person(callCenterOperator, "Оператор кол-центра", "Сотрудник внутреннего кол-центра банка, консультирующий клиентов по ставкам", $sprite="headset")
+Person(partnerOperator, "Оператор партнерского кол-центра", "Сотрудник внешнего партнерского кол-центра", $sprite="headset")
+Person(client, "Клиент банка", "Звонит в кол-центр для получения информации о депозитах", $sprite="users")
+
+System_Boundary(bankSystems, "Банк 'Стандарт'") {
+    System(depositPlatform, "Депозитная платформа", "Платформа управления депозитами с сервисом ставок", $sprite="university")
+    System(callCenterSystem, "Система кол-центра", "CRM-система для операторов внутреннего кол-центра", $sprite="headset")
+}
+
+System_Ext(abs, "АБС", "Автоматизированная банковская система - источник актуальных ставок", $sprite="university")
+System_Ext(sftpServer, "SFTP-сервер", "Файловый сервер для обмена данными с партнером", $sprite="server")
+System_Ext(partnerCallCenter, "Партнерский кол-центр", "Внешняя система партнерского кол-центра", $sprite="headset")
+
+' Client interactions
+Rel(client, callCenterOperator, "Звонит с вопросами о ставках по депозитам", "Телефон")
+Rel(client, partnerOperator, "Звонит в партнерский кол-центр", "Телефон")
+
+' Operator interactions
+Rel(callCenterOperator, callCenterSystem, "Использует для консультации клиентов", "Web UI")
+Rel(partnerOperator, partnerCallCenter, "Работает с полученными файлами ставок", "Интерфейс партнера")
+
+' System integrations
+Rel(callCenterSystem, depositPlatform, "Запрашивает актуальные ставки по депозитам", "REST API")
+Rel(depositPlatform, abs, "Синхронизирует ставки", "Database/API")
+Rel(depositPlatform, sftpServer, "Передает файлы с актуальными ставками", "SFTP")
+Rel(partnerCallCenter, sftpServer, "Получает файлы со ставками", "SFTP")
+
+note right of depositPlatform
+  **Депозитная платформа расширена:**
+  - API для получения ставок кол-центром
+  - Автоматическая генерация файлов
+  - Планировщик обновления ставок
+  - Кэширование для быстрого доступа
+end note
+
+note left of callCenterSystem
+  **Минимальные изменения:**
+  - Добавлен вызов API ставок
+  - Новый раздел интерфейса
+  - Без изменений архитектуры
+end note
+
+note bottom of sftpServer
+  **SFTP-интеграция:**
+  - Защищенная передача файлов
+  - Автоматическое обновление
+  - Мониторинг доступности
+  - Резервирование сервера
+end note
+
+note right of partnerCallCenter
+  **Партнерский кол-центр:**
+  - Получает файлы по расписанию
+  - Самостоятельная обработка
+  - Минимальные требования к интеграции
+  - Работа в автономном режиме
+end note
+
+note top of client
+  **Сценарии клиентов:**
+  - Звонок в банковский кол-центр
+  - Звонок в партнерский кол-центр
+  - Получение актуальных ставок
+  - Консультация по условиям депозитов
+end note
+
+@enduml 

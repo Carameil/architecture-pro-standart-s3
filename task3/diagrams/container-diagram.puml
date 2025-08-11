@@ -1,0 +1,135 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C4 Container Diagram - Банк "Стандарт" - Депозитная платформа (MVP)
+
+Person(newClient, "Новый клиент", "Потенциальный клиент банка")
+Person(existingClient, "Существующий клиент", "Клиент с доступом к ИБ")
+Person(backofficeEmployee, "Сотрудник бэк-офиса", "Менеджер депозитов")
+Person(callCenterAgent, "Сотрудник кол-центра", "Оператор КЦ")
+
+System_Ext(telecomOperator, "Телеком-оператор", "Внешний СМС-оператор")
+
+System_Boundary(depositPlatform, "Депозитная платформа") {
+    ' Client Applications
+    Container(website, "Веб-сайт", "PHP, React.js", "Публичный сайт с формой подачи заявок на депозиты")
+    Container(internetBankingWeb, "Интернет-банк (Web)", "ASP.NET MVC 4.5", "Веб-интерфейс интернет-банка")
+    Container(backofficePortal, "Бэк-офис портал", "React.js", "Рабочее место сотрудников депозитного отдела")
+    Container(callCenterPortal, "Портал кол-центра", "React.js", "Интерфейс для работы с заявками новых клиентов")
+    
+    ' API Layer
+    Container(apiGateway, "API Gateway", "Kong", "Единая точка входа, аутентификация, rate limiting")
+    
+    ' Core Services
+    Container(depositsService, "Deposits Service", "Java Spring Boot", "Управление депозитами, обработка заявок, кэширование ставок")
+    Container(ratesService, "Rates Service", "Java Spring Boot", "Управление ставками по депозитам")
+    Container(notificationService, "Notification Service", "Java Spring Boot", "Отправка уведомлений и СМС")
+    Container(authService, "Auth Service", "Java Spring Boot", "Аутентификация и авторизация")
+    
+    ' Data Layer
+    ContainerDb(depositsDb, "Deposits Database", "PostgreSQL", "Заявки на депозиты, статусы")
+    ContainerDb(ratesDb, "Rates Database", "PostgreSQL", "Актуальные ставки, история изменений")
+    ContainerDb(cacheRedis, "Redis Cache", "Redis", "Кэш ставок, сессии пользователей")
+    
+    ' Integration Layer
+    Container(eventBus, "Event Bus", "Apache Kafka", "Асинхронная обработка событий")
+    Container(absAdapter, "ABS Adapter", "Java Spring Boot", "Адаптер для интеграции с АБС")
+    Container(smsService, "SMS Service", "Java Spring Boot", "Сервис отправки СМС")
+}
+
+System_Boundary(legacySystems, "Legacy-системы банка") {
+    Container(abs, "АБС", "Oracle, Delphi", "Автоматизированная банковская система")
+    ContainerDb(absDb, "ABS Database", "Oracle", "Основная база данных банка")
+    Container(internetBankingCore, "ИБ Core", "ASP.NET Framework", "Ядро интернет-банка")
+    Container(callCenterSystem, "Система кол-центра", "Java Spring Boot", "CRM-система кол-центра")
+    Container(smsGateway, "СМС-шлюз", "Custom", "Шлюз для отправки СМС")
+}
+
+' User Interactions
+Rel(newClient, website, "Подает заявку на депозит", "HTTPS")
+Rel(existingClient, internetBankingWeb, "Управляет депозитами", "HTTPS")
+Rel(backofficeEmployee, backofficePortal, "Обрабатывает заявки", "HTTPS")
+Rel(callCenterAgent, callCenterPortal, "Работает с новыми клиентами", "HTTPS")
+
+' Frontend to API Gateway
+Rel(website, apiGateway, "API запросы", "HTTPS/REST")
+Rel(internetBankingWeb, apiGateway, "API запросы", "HTTPS/REST")
+Rel(backofficePortal, apiGateway, "API запросы", "HTTPS/REST")
+Rel(callCenterPortal, apiGateway, "API запросы", "HTTPS/REST")
+
+' API Gateway to Services
+Rel(apiGateway, depositsService, "Маршрутизация запросов", "HTTP/REST")
+Rel(apiGateway, ratesService, "Маршрутизация запросов", "HTTP/REST")
+Rel(apiGateway, authService, "Аутентификация", "HTTP/REST")
+Rel(apiGateway, notificationService, "Уведомления", "HTTP/REST")
+
+' Service to Database
+Rel(depositsService, depositsDb, "CRUD операции", "SQL")
+Rel(ratesService, ratesDb, "CRUD операции", "SQL")
+Rel(authService, cacheRedis, "Сессии", "Redis Protocol")
+Rel(depositsService, cacheRedis, "Кэш ставок", "Redis Protocol")
+Rel(ratesService, cacheRedis, "Кэш ставок", "Redis Protocol")
+
+' Event-driven Communication
+Rel(depositsService, eventBus, "Публикация событий", "Kafka")
+Rel(ratesService, eventBus, "Публикация событий", "Kafka")
+Rel(notificationService, eventBus, "Подписка на события", "Kafka")
+Rel(absAdapter, eventBus, "Публикация событий", "Kafka")
+
+' Service Interactions
+Rel(depositsService, ratesService, "Получение ставок", "HTTP/REST")
+Rel(depositsService, authService, "Валидация пользователей", "HTTP/REST")
+Rel(depositsService, absAdapter, "Создание депозитов", "HTTP/REST")
+
+' Legacy Integration
+Rel(absAdapter, abs, "API вызовы", "REST/DB")
+Rel(abs, absDb, "CRUD операции", "SQL")
+Rel(internetBankingWeb, internetBankingCore, "Внутренние вызовы", "Internal API")
+Rel(internetBankingCore, absDb, "Прямой доступ к БД", "SQL")
+Rel(callCenterPortal, callCenterSystem, "CRM операции", "HTTP/REST")
+Rel(notificationService, smsService, "Отправка СМС", "HTTP/REST")
+Rel(smsService, smsGateway, "SMS Gateway", "HTTP")
+Rel(smsGateway, telecomOperator, "Доставка СМС", "Telecom")
+
+' Cross-service Communication
+Rel(ratesService, absAdapter, "Синхронизация ставок", "HTTP/REST")
+
+note right of depositsService
+  **Deposits Service - Основной сервис:**
+  - Создание и управление заявками
+  - Валидация данных депозитов
+  - Кэширование персональных ставок
+  - Управление жизненным циклом заявок
+  - Интеграция с АБС через адаптер
+end note
+
+note left of eventBus
+  **Event Bus - Асинхронные события:**
+  - deposit.application.created
+  - deposit.application.approved
+  - deposit.application.rejected
+  - rates.updated
+  - notification.sms.requested
+end note
+
+note bottom of absAdapter
+  **ABS Adapter - Защитный слой:**
+  - Rate limiting для защиты АБС
+  - Пакетная обработка запросов
+  - Retry механизмы
+  - Мониторинг производительности
+  - Трансформация данных
+end note
+
+note top of apiGateway
+  **API Gateway возможности:**
+  - Аутентификация JWT токенов
+  - Rate limiting по клиентам
+  - Логирование и мониторинг
+  - Circuit breaker pattern
+  - Load balancing
+end note
+
+@enduml 

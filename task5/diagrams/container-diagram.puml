@@ -1,0 +1,198 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C4 Container Diagram - Банк "Стандарт" - Расширенная платформа (Депозиты + Кредиты)
+
+Person(newClient, "Новый клиент", "Потенциальный клиент банка")
+Person(existingClient, "Существующий клиент", "Клиент с доступом к ИБ")
+Person(backofficeDeposits, "Сотрудник депозитного отдела", "Менеджер депозитов")
+Person(backofficeCredits, "Сотрудник кредитного отдела", "Менеджер кредитов")
+Person(callCenterAgent, "Сотрудник кол-центра", "Оператор КЦ")
+
+System_Ext(telecomOperator, "Телеком-оператор", "Внешний СМС-оператор")
+System_Ext(bki, "БКИ", "Бюро кредитных историй")
+System_Ext(partnerCallCenter, "Партнерский кол-центр", "Внешняя система партнерского кол-центра")
+
+System_Boundary(expandedPlatform, "Расширенная финансовая платформа") {
+    ' Client Applications (Existing + Extended)
+    Container(website, "Веб-сайт", "PHP, React.js", "Публичный сайт с формами депозитов и кредитов")
+    Container(internetBankingWeb, "Интернет-банк (Web)", "ASP.NET MVC 4.5", "Веб-интерфейс с депозитами и кредитами")
+    Container(backofficePortalDeposits, "Депозитный портал", "React.js", "Рабочее место депозитного отдела")
+    Container(backofficePortalCredits, "Кредитный портал", "React.js", "Рабочее место кредитного отдела")
+    Container(callCenterPortal, "Портал кол-центра", "React.js", "Интерфейс для работы с заявками")
+    
+    ' Shared Infrastructure (Existing from MVP)
+    Container(apiGateway, "API Gateway", "Kong", "Единая точка входа, аутентификация, rate limiting")
+    Container(authService, "Auth Service", "Java Spring Boot", "Аутентификация и авторизация")
+    Container(notificationService, "Notification Service", "Java Spring Boot", "Уведомления депозитов и кредитов")
+    Container(eventBus, "Event Bus", "Apache Kafka", "Асинхронная обработка событий")
+    Container(smsService, "SMS Service", "Java Spring Boot", "Сервис отправки СМС")
+    ContainerDb(cacheRedis, "Redis Cache", "Redis", "Кэш ставок, сессии, предодобренные предложения")
+    
+    ' Existing Deposit Services (from MVP)
+    Container(depositsService, "Deposits Service", "Java Spring Boot", "Управление депозитами")
+    Container(ratesService, "Rates Service", "Java Spring Boot", "Управление ставками по депозитам")
+    ContainerDb(depositsDb, "Deposits Database", "PostgreSQL", "Заявки на депозиты")
+    ContainerDb(ratesDb, "Rates Database", "PostgreSQL", "Ставки по депозитам")
+    
+    ' New Credit Services
+    Container(creditsService, "Credits Service", "Java Spring Boot", "Управление кредитными заявками и предодобренными предложениями")
+    Container(scoringIntegrationService, "Scoring Integration Service", "Java Spring Boot", "Адаптер для Scoring System")
+    Container(bkiAdapter, "BKI Adapter", "Java Spring Boot", "Интеграция с БКИ")
+    Container(creditConveyorAdapter, "Credit Conveyor Adapter", "Java Spring Boot", "Адаптер для Credit Conveyor")
+    ContainerDb(creditsDb, "Credits Database", "PostgreSQL", "Кредитные заявки, предодобренные предложения")
+    
+    ' SFTP Infrastructure (from Task 4)
+    Container(sftpFileGenerator, "SFTP File Generator", "Java Spring Boot", "Генерация файлов со ставками для партнеров")
+    Container(sftpServer, "SFTP Server", "OpenSSH", "Файловый сервер для обмена с партнерами")
+    
+    ' Existing Integration Layer (from MVP)
+    Container(absAdapter, "ABS Adapter", "Java Spring Boot", "Адаптер для интеграции с АБС")
+}
+
+System_Boundary(legacySystems, "Legacy-системы банка") {
+    Container(abs, "АБС", "Oracle, Delphi", "Автоматизированная банковская система")
+    ContainerDb(absDb, "ABS Database", "Oracle", "Основная база данных банка")
+    Container(internetBankingCore, "ИБ Core", "ASP.NET Framework", "Ядро интернет-банка")
+    Container(callCenterSystem, "Система кол-центра", "Java Spring Boot", "CRM-система кол-центра с интеграцией депозитов и кредитов")
+    Container(smsGateway, "СМС-шлюз", "Custom", "Шлюз для отправки СМС")
+    
+    ' Existing Credit Systems (No Changes)
+    Container(creditConveyor, "Credit Conveyor", "Camunda, Oracle", "Существующая система обработки кредитов")
+    Container(scoringSystem, "Scoring System", "Python, Flask, PostgreSQL", "Система кредитного скоринга")
+}
+
+' User Interactions
+Rel(newClient, website, "Подает заявки на депозиты и кредиты", "HTTPS")
+Rel(existingClient, internetBankingWeb, "Управляет депозитами и кредитами", "HTTPS")
+Rel(backofficeDeposits, backofficePortalDeposits, "Обрабатывает депозитные заявки", "HTTPS")
+Rel(backofficeCredits, backofficePortalCredits, "Обрабатывает кредитные заявки", "HTTPS")
+Rel(callCenterAgent, callCenterPortal, "Работает с новыми клиентами", "HTTPS")
+
+' Frontend to API Gateway
+Rel(website, apiGateway, "API запросы", "HTTPS/REST")
+Rel(internetBankingWeb, apiGateway, "API запросы", "HTTPS/REST")
+Rel(backofficePortalDeposits, apiGateway, "API запросы", "HTTPS/REST")
+Rel(backofficePortalCredits, apiGateway, "API запросы", "HTTPS/REST")
+Rel(callCenterPortal, apiGateway, "API запросы", "HTTPS/REST")
+
+' API Gateway to Services (Existing + New)
+Rel(apiGateway, depositsService, "Депозитные запросы", "HTTP/REST")
+Rel(apiGateway, creditsService, "Кредитные запросы", "HTTP/REST")
+Rel(apiGateway, ratesService, "Ставки по депозитам и кредитам", "HTTP/REST")
+Rel(apiGateway, authService, "Аутентификация", "HTTP/REST")
+Rel(apiGateway, notificationService, "Уведомления", "HTTP/REST")
+
+' Service to Database
+Rel(depositsService, depositsDb, "CRUD операции", "SQL")
+Rel(creditsService, creditsDb, "CRUD операции", "SQL")
+Rel(ratesService, ratesDb, "CRUD операции", "SQL")
+Rel(authService, cacheRedis, "Сессии", "Redis Protocol")
+Rel(depositsService, cacheRedis, "Кэш ставок", "Redis Protocol")
+Rel(creditsService, cacheRedis, "Предодобренные предложения", "Redis Protocol")
+
+' Event-driven Communication (Extended)
+Rel(depositsService, eventBus, "Депозитные события", "Kafka")
+Rel(creditsService, eventBus, "Кредитные события", "Kafka")
+Rel(ratesService, eventBus, "События ставок депозитов и кредитов", "Kafka")
+Rel(notificationService, eventBus, "Подписка на события", "Kafka")
+Rel(creditConveyorAdapter, eventBus, "События от Credit Conveyor", "Kafka")
+Rel(scoringIntegrationService, eventBus, "События скоринга", "Kafka")
+
+' SFTP File Operations (Extended from Task 4)
+Rel(sftpFileGenerator, ratesService, "Получение ставок депозитов и кредитов", "Internal API")
+Rel(sftpFileGenerator, creditsService, "Получение кредитных условий", "Internal API")
+Rel(sftpFileGenerator, sftpServer, "Загрузка файлов со ставками", "SFTP")
+Rel(partnerCallCenter, sftpServer, "Скачивание объединенных файлов ставок", "SFTP")
+
+' New Credit Service Interactions
+Rel(creditsService, scoringIntegrationService, "Запрос предварительной оценки", "HTTP/REST")
+Rel(creditsService, bkiAdapter, "Получение кредитной истории", "HTTP/REST")
+Rel(creditsService, creditConveyorAdapter, "Передача заявок в обработку", "HTTP/REST")
+Rel(creditsService, authService, "Валидация пользователей", "HTTP/REST")
+
+' Credit Integration Services to External
+Rel(scoringIntegrationService, scoringSystem, "Запросы скоринга", "HTTP/REST")
+Rel(bkiAdapter, bki, "Запросы кредитных историй", "HTTPS/REST")
+Rel(creditConveyorAdapter, creditConveyor, "API вызовы", "HTTP/REST")
+
+' Existing Integrations (Unchanged)
+Rel(depositsService, ratesService, "Получение ставок", "HTTP/REST")
+Rel(depositsService, absAdapter, "Создание депозитов", "HTTP/REST")
+Rel(ratesService, absAdapter, "Синхронизация ставок", "HTTP/REST")
+
+' Legacy Integration (Extended)
+Rel(absAdapter, abs, "API вызовы", "REST/DB")
+Rel(abs, absDb, "CRUD операции", "SQL")
+Rel(internetBankingWeb, internetBankingCore, "Внутренние вызовы", "Internal API")
+Rel(internetBankingCore, absDb, "Прямой доступ к БД", "SQL")
+Rel(callCenterPortal, callCenterSystem, "CRM операции", "HTTP/REST")
+Rel(notificationService, smsService, "Отправка СМС", "HTTP/REST")
+Rel(smsService, smsGateway, "SMS Gateway", "HTTP")
+Rel(smsGateway, telecomOperator, "Доставка СМС", "Telecom")
+
+' Legacy Credit Systems (Existing flows preserved)
+Rel(creditConveyor, abs, "Синхронизация решений (раз в день)", "Database")
+Rel(scoringSystem, abs, "Получение данных клиентов (раз в день)", "Database")
+Rel(scoringSystem, bki, "Запросы кредитных историй", "REST API")
+
+note right of creditsService
+  **Credits Service - Новый основной сервис:**
+  - Управление кредитными заявками
+  - Генерация предодобренных предложений
+  - Кэширование результатов скоринга
+  - Интеграция с существующими системами
+  - Управление жизненным циклом заявок
+end note
+
+note left of eventBus
+  **Расширенный Event Bus:**
+  Депозитные события (существующие):
+  - deposit.application.created/approved/rejected
+  
+  Новые кредитные события:
+  - credit.application.created
+  - credit.preapproval.generated
+  - credit.application.approved/rejected
+  - credit.scoring.completed
+  
+  События ставок (расширенные):
+  - rates.deposit.updated/rates.credit.updated
+end note
+
+note bottom of sftpFileGenerator
+  **SFTP расширение (Task 4 → Task 5):**
+  - Изначально: только ставки депозитов
+  - Расширение: объединенные файлы депозитов + кредитов
+  - Единый формат для партнерского кол-центра
+  - Консолидированное обслуживание клиентов
+end note
+
+note bottom of scoringIntegrationService
+  **Новые интеграционные адаптеры:**
+  - Scoring Integration: защита от перегрузки Scoring System
+  - BKI Adapter: кэширование и rate limiting для БКИ
+  - Credit Conveyor Adapter: асинхронная интеграция
+  - Все с circuit breaker pattern
+end note
+
+note top of apiGateway
+  **Расширенный API Gateway:**
+  - Новые маршруты для кредитных API
+  - Дифференцированный rate limiting
+  - Метрики по депозитам и кредитам
+  - Единая аутентификация
+  - Переиспользование кол-центр интеграции
+end note
+
+note left of legacySystems
+  **Legacy-системы без изменений:**
+  - Credit Conveyor: сохраняет существующие процессы
+  - Scoring System: работает как прежде
+  - АБС: защищена через существующий адаптер
+  - Пакетная синхронизация раз в день сохранена
+end note
+
+@enduml 

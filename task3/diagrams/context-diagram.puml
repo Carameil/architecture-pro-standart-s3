@@ -1,0 +1,74 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+!define DEVICONS https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/devicons
+!define FONTAWESOME https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/font-awesome-5
+!include DEVICONS/react.puml
+!include DEVICONS/java.puml
+!include FONTAWESOME/users.puml
+!include FONTAWESOME/university.puml
+!include FONTAWESOME/mobile_alt.puml
+!include FONTAWESOME/headset.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C4 Context Diagram - Банк "Стандарт" - Открытие депозитов онлайн (MVP)
+
+Person(newClient, "Новый клиент", "Потенциальный клиент банка, подающий заявку на депозит через сайт", $sprite="users")
+Person(existingClient, "Существующий клиент", "Клиент банка с доступом к интернет-банку", $sprite="users")
+Person(backofficeEmployee, "Сотрудник бэк-офиса", "Менеджер депозитного отдела, обрабатывающий заявки", $sprite="headset")
+Person(callCenterAgent, "Сотрудник кол-центра", "Оператор, связывающийся с новыми клиентами", $sprite="headset")
+
+System_Boundary(standardBank, "Банк 'Стандарт' - Депозитная платформа") {
+    System(depositPlatform, "Депозитная платформа", "Система управления депозитами с веб-каналами, обработкой заявок и интеграцией с банковскими системами", $sprite="university")
+}
+
+System_Ext(abs, "АБС", "Автоматизированная банковская система (Oracle, Delphi) - core система банка", $sprite="university")
+System_Ext(smsGateway, "СМС-шлюз", "Система отправки СМС-уведомлений через телеком-оператора", $sprite="mobile_alt")
+System_Ext(telecomOperator, "Телеком-оператор", "Внешний оператор для доставки СМС", $sprite="mobile_alt")
+
+Rel(newClient, depositPlatform, "Подает заявку на депозит, просматривает ставки", "HTTPS/Website")
+Rel(existingClient, depositPlatform, "Управляет депозитами, видит персонализированные ставки", "HTTPS/Internet Banking")
+Rel(callCenterAgent, depositPlatform, "Просматривает заявки новых клиентов, связывается с ними", "Web Interface")
+Rel(backofficeEmployee, depositPlatform, "Обрабатывает заявки на депозиты", "Web Interface")
+
+Rel(depositPlatform, abs, "Создает депозиты, получает данные клиентов, синхронизирует ставки", "REST API/Database")
+Rel(depositPlatform, smsGateway, "Отправляет уведомления о статусе заявок", "HTTP API")
+Rel(smsGateway, telecomOperator, "Доставляет СМС клиентам", "Telecom Protocol")
+
+note right of depositPlatform
+  **MVP Features:**
+  - Подача заявок с сайта и ИБ
+  - Отображение актуальных ставок
+  - СМС-подтверждения операций
+  - Обработка заявок в бэк-офисе
+  - Интеграция с АБС без перегрузки
+end note
+
+note left of newClient
+  **Сценарий нового клиента:**
+  - Просмотр ставок на сайте
+  - Подача заявки (ФИО, телефон)
+  - Звонок от кол-центра
+  - Визит в отделение для идентификации
+  - Получение СМС о статусе
+end note
+
+note right of existingClient
+  **Сценарий существующего клиента:**
+  - Авторизация в интернет-банке
+  - Просмотр персонализированных ставок
+  - Выбор счета и суммы депозита
+  - СМС-подтверждение операции
+  - Отслеживание статуса заявки
+end note
+
+note bottom of abs
+  **Интеграционные ограничения:**
+  - Защита от перегрузки
+  - Контролируемый API доступ
+  - Пакетная синхронизация данных
+  - Сохранение существующих процессов
+end note
+
+@enduml 
